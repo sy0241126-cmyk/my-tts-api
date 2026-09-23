@@ -1,21 +1,25 @@
 from fastapi import FastAPI, HTTPException
 import requests
-import os
-from fastapi.responses import RedirectResponse
+from deep_translator import GoogleTranslator
 
 app = FastAPI()
 
-# Pexels API Key jo aapne abhi banayi hai
 PEXELS_API_KEY = "AzR2SYG5DNdPvu4fTJYyY1piJlPHKkaFXzqJM2y0uqKIw5YlVAHlvAQt"
 
 @app.get("/")
 def home():
-    return {"message": "AI Voice & Script Studio API is Running!"}
+    return {"message": "Hindi Script Photo Finder API is Running!"}
 
-# 1. Pexels Photo Search Endpoint
 @app.get("/search-photos")
 def search_photos(query: str):
-    url = f"https://api.pexels.com/v1/search?query={query}&per_page=5"
+    try:
+        # 1. Hindi query ko automatically English me translate karna
+        english_query = GoogleTranslator(source='auto', target='en').translate(query)
+    except Exception as e:
+        english_query = query # Agar translation me error aaye toh wahi query bhej do
+    
+    # 2. Pexels API par English query bhejna
+    url = f"https://api.pexels.com/v1/search?query={english_query}&per_page=5"
     headers = {
         "Authorization": PEXELS_API_KEY
     }
@@ -28,6 +32,4 @@ def search_photos(query: str):
     data = response.json()
     photos = [photo["src"]["large"] for photo in data.get("photos", [])]
     
-    return {"query": query, "photos": photos}
-
-# 2. Aapka Purana Edge-TTS / Audio Endpoint yahan rahega (Agar aapne alag se rakha hai)
+    return {"hindi_query": query, "english_query": english_query, "photos": photos}
