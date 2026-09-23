@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, HTTPException
 from fastapi.responses import FileResponse
 import edge_tts
 import requests
@@ -39,63 +39,69 @@ async def generate_video(text: str, voice: str = "hi-IN-MadhurNeural", mode: str
             except Exception:
                 pass
 
-    # 1. TTS Audio generate karein
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(audio_path)
-    
-    # 2. Aspect Ratio tay karein
-    if mode == "horizontal":
-        pexels_orientation = "landscape"
-        target_size = (1920, 1080)
-    else:
-        pexels_orientation = "portrait"
-        target_size = (1080, 1920)
-
-    # 3. Pexels se Image download karein
-    headers = {"Authorization": PEXELS_API_KEY}
-    url = f"https://api.pexels.com/v1/search?query=nature background&orientation={pexels_orientation}&per_page=15"
-    
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200 and res.json().get("photos"):
-            photos = res.json()["photos"]
-            img_url = random.choice(photos)["src"]["large2x"]
-            img_data = requests.get(img_url, timeout=10).content
-            with open(img_path, "wb") as f:
-                f.write(img_data)
+        # 1. TTS Audio generate karein
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(audio_path)
+        
+        # 2. Aspect Ratio tay karein
+        if mode == "horizontal":
+            pexels_orientation = "landscape"
+            target_size = (1920, 1080)
         else:
+            pexels_orientation = "portrait"
+            target_size = (1080, 1920)
+
+        # 3. Pexels se Image fetch karein (Proper encoding ke saath)
+        headers = {"Authorization": PEXELS_API_KEY}
+        params = {
+            "query": "nature",
+            "orientation": pexels_orientation,
+            "per_page": 15
+        }
+        url = "https://api.pexels.com/v1/search"
+        
+        img_downloaded = False
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=10)
+            if res.status_code == 200 and res.json().get("photos"):
+                photos = res.json()["photos"]
+                img_url = random.choice(photos)["src"]["large2x"]
+                img_data = requests.get(img_url, timeout=10).content
+                with open(img_path, "wb") as f:
+                    f.write(img_data)
+                img_downloaded = True
+        except Exception:
+            pass
+
+        if not img_downloaded:
             img = Image.new('RGB', target_size, color=(20, 20, 35))
             img.save(img_path)
-    except Exception:
-        img = Image.new('RGB', target_size, color=(20, 20, 35))
-        img.save(img_path)
 
-    # 4. Image Resize karein
-    try:
+        # 4. Image Resize karein
         img = Image.open(img_path).convert("RGB")
         img = img.resize(target_size)
         img.save(img_path)
-    except Exception:
-        img = Image.new('RGB', target_size, color=(20, 20, 35))
-        img.save(img_path)
 
-    # 5. Fast FFmpeg se Video (.mp4) banayein
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    cmd = [
-        ffmpeg_exe,
-        "-y",
-        "-loop", "1",
-        "-i", img_path,
-        "-i", audio_path,
-        "-c:v", "libx264",
-        "-tune", "stillimage",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        output_video
-    ]
-    
-    subprocess.run(cmd, check=True)
+        # 5. Fast FFmpeg se Video (.mp4) banayein
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        cmd = [
+            ffmpeg_exe,
+            "-y",
+            "-loop", "1",
+            "-i", img_path,
+            "-i", audio_path,
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            output_video
+        ]
+        
+        subprocess.run(cmd, check=True)
 
-    return FileResponse(output_video, media_type="video/mp4")
+        return FileResponse(output_video, media_type="video/mp4")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
