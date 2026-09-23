@@ -1,27 +1,33 @@
-from fastapi import FastAPI, Response
-import edge_tts
+from fastapi import FastAPI, HTTPException
+import requests
 import os
+from fastapi.responses import RedirectResponse
 
 app = FastAPI()
 
+# Pexels API Key jo aapne abhi banayi hai
+PEXELS_API_KEY = "AzR2SYG5DNdPvu4fTJYyY1piJlPHKkaFXzqJM2y0uqKIw5YlVAHlvAQt"
+
 @app.get("/")
-def read_root():
-    return {"status": "AI Voice Generator Server Live"}
+def home():
+    return {"message": "AI Voice & Script Studio API is Running!"}
 
-@app.get("/tts")
-async def tts(text: str, voice: str = "hi-IN-MadhurNeural"):
-    output_file = "output.mp3"
+# 1. Pexels Photo Search Endpoint
+@app.get("/search-photos")
+def search_photos(query: str):
+    url = f"https://api.pexels.com/v1/search?query={query}&per_page=5"
+    headers = {
+        "Authorization": PEXELS_API_KEY
+    }
     
-    if os.path.exists(output_file):
-        try:
-            os.remove(output_file)
-        except Exception:
-            pass
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Pexels API se data laane me samasya aayi")
+    
+    data = response.json()
+    photos = [photo["src"]["large"] for photo in data.get("photos", [])]
+    
+    return {"query": query, "photos": photos}
 
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_file)
-    
-    with open(output_file, "rb") as f:
-        data = f.read()
-        
-    return Response(content=data, media_type="audio/mpeg")
+# 2. Aapka Purana Edge-TTS / Audio Endpoint yahan rahega (Agar aapne alag se rakha hai)
