@@ -18,8 +18,8 @@ def search_photos(query: str):
     except Exception as e:
         english_query = query # Agar translation me error aaye toh wahi query bhej do
     
-    # 2. Pexels API par English query bhejna
-    url = f"https://api.pexels.com/v1/search?query={english_query}&per_page=5"
+    # 2. Pexels API par English query bhejna (Ab per_page 15 कर दिया है)
+    url = f"https://api.pexels.com/v1/search?query={english_query}&per_page=15"
     headers = {
         "Authorization": PEXELS_API_KEY
     }
